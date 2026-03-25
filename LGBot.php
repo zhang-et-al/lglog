@@ -247,8 +247,9 @@ class LGBot
 		return intval(substr($points, 0, strpos($points, ' ')));
 	}
 
-	// Yes, it's uploadFile and not uploadVideo. Livegore will let you upload ANY file
+	// Yes, it's uploadFile and not uploadVideo. Livegore will let you upload any file
 	// as long as you set its extension to '.mp4'
+	// Only problem is the server will only serve it with a video/mp4 mimetype
 	public function uploadFile(string $filename) : string
 	{
 		if(!is_file($filename))
@@ -283,6 +284,55 @@ class LGBot
 		}
 
 		return 'https://xxx.livegore.com/rb-include/videos/' . $jsonResponse[0] . '.mp4';
+	}
+
+
+	// Since the Livegore backend does manipulate the images you post (unlike the videos), it will typically
+	// respond with a "resize error" if you post a file with the wrong format
+	// It seems the 2mb file size limit is only checked on the frontend
+	// Use this method instead of uploadFile() to post images that you want to be displayed as such
+	public function uploadImage(string $filename) : string
+	{
+		if(!is_file($filename))
+			throw new Exception("Attempted to upload non-existing file $filename");
+
+		# Default extension
+		$payloadExt = "jpg";
+
+		$fileExt = strtolower(pathinfo($filename, PATHINFO_EXTENSION));
+
+		# Other allowed extensions
+		if(in_array($fileExt, ['png', 'gif']))
+			$payloadExt = $fileExt;
+
+		$res = $this->client->post('/rb-include/processupload.php', [
+			'headers' => [
+				'Referer' => 'https://www.livegore.com/video',
+				'X-Requested-With' => 'XMLHttpRequest',
+				'Sec-GPC' => '1',
+				'Sec-Fetch-Dest' => 'empty',
+				'Sec-Fetch-Mode' => 'cors',
+				'Sec-Fetch-Site' => 'same-origin'
+			],
+			'multipart' => [
+				[
+					'name' => 'ImageFile',
+					'filename' => pathinfo($filename, PATHINFO_FILENAME) . ".$payloadExt",
+					'contents' => fopen($filename, 'r'),
+				]
+			],
+			'allow_redirects' => false
+		]);
+
+		$imageUrl = $this->runXPath($res, '//img[1]/@src')[0]->nodeValue;
+
+		if(!$imageUrl)
+		{
+			$this->log("Could not upload: server responded with \n". $res->getBody());
+			return "";
+		}
+
+		return $imageUrl;
 	}
 
 	public function log(string $info, mixed... $values) : void
