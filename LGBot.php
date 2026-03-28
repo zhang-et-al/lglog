@@ -324,7 +324,7 @@ class LGBot
 			'allow_redirects' => false
 		]);
 
-		$imageUrl = $this->runXPath($res, '//img[1]/@src')[0]->nodeValue;
+		$imageUrl = $this->runXPath($res, '//img[1]/@src')[0]?->nodeValue;
 
 		if(!$imageUrl)
 		{
